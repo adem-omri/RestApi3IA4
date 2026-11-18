@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REST API Detective — Case #001</title>
+<style>
+:root{
+  --bg:#0B1020;--surface:#10172a;--surface-2:#151e35;--inset:#070b17;
+  --border:#222d47;--border-strong:#33415f;
+  --fg:#F1F5F9;--fg-muted:#94A3B8;--fg-subtle:#64748B;
+  --primary:#3B82F6;--primary-hover:#60A5FA;--info:#38BDF8;
+  --success:#22C55E;--danger:#F87171;--warning:#F59E0B;
+  --r-sm:6px;--r:10px;--r-lg:14px;
+  --ease:cubic-bezier(.2,.8,.2,1);--dur:200ms;
+  --sans:"IBM Plex Sans","Inter","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono","Cascadia Code","Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:clamp(13px,1.02vw,21px)}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.5;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:linear-gradient(rgba(148,163,184,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.045) 1px,transparent 1px);background-size:48px 48px}
+.i{width:1.15em;height:1.15em;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.2em}
+:focus-visible{outline:2px solid var(--info);outline-offset:3px;border-radius:var(--r-sm)}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+
+/* ---------- Chrome ---------- */
+header{display:flex;align-items:center;gap:2rem;padding:.75rem 2.5rem;border-bottom:1px solid var(--border);background:rgba(11,16,32,.85);backdrop-filter:blur(8px);position:relative;z-index:10}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand .mark{display:grid;place-items:center;width:2rem;height:2rem;border-radius:var(--r-sm);background:var(--primary);color:#fff}
+.brand small{font:500 .75rem var(--mono);color:var(--fg-subtle);margin-left:.2rem}
+#progress{flex:1;display:flex;align-items:center}
+.step{display:flex;align-items:center;gap:.5rem;background:none;border:0;padding:.35rem .5rem;border-radius:var(--r-sm);color:var(--fg-subtle);font-size:.82rem;font-weight:500;white-space:nowrap;transition:color var(--dur) var(--ease)}
+.step .dot{display:grid;place-items:center;width:1.6rem;height:1.6rem;border-radius:50%;border:1.5px solid var(--border-strong);font:600 .75rem var(--mono);transition:all var(--dur) var(--ease)}
+.step:hover{color:var(--fg)}
+.step.done{color:var(--fg-muted)}.step.done .dot{background:rgba(34,197,94,.12);border-color:var(--success);color:var(--success)}
+.step.active{color:var(--fg)}.step.active .dot{background:var(--primary);border-color:var(--primary);color:#fff}
+.sep{flex:1;height:1.5px;background:var(--border);min-width:.8rem;margin:0 .2rem;border-radius:2px;transition:background var(--dur)}
+.sep.done{background:var(--success)}
+.bar{position:absolute;left:0;bottom:-1px;height:2px;background:var(--primary);transition:width .4s var(--ease)}
+footer{display:flex;justify-content:space-between;align-items:center;padding:.75rem 2.5rem;border-top:1px solid var(--border);background:rgba(11,16,32,.85)}
+#counter{font:500 .85rem var(--mono);color:var(--fg-subtle);letter-spacing:.08em}
+.kbd{font:500 .75rem var(--mono);border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:4px;padding:.05rem .4rem;color:var(--fg-muted)}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:44px;font-weight:600;font-size:.95rem;border:1px solid transparent;border-radius:var(--r);padding:.6rem 1.15rem;background:var(--primary);color:#fff;transition:background var(--dur) var(--ease),border-color var(--dur),transform 120ms var(--ease)}
+.btn:hover:not(:disabled){background:var(--primary-hover)}
+.btn:active:not(:disabled){transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.secondary{background:var(--surface-2);border-color:var(--border-strong);color:var(--fg)}
+.btn.secondary:hover:not(:disabled){background:#1b2642;border-color:#43537a}
+.btn.success{background:var(--success);color:#052e14}.btn.success:hover:not(:disabled){background:#4ade80}
+.btn.lg{font-size:1.1rem;padding:.85rem 1.6rem;border-radius:var(--r-lg)}
+
+/* ---------- Layout ---------- */
+main{flex:1;position:relative;overflow:hidden}
+.slide{position:absolute;inset:0;padding:2rem 2.5rem 2.5rem;overflow-y:auto;opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .3s var(--ease),transform .3s var(--ease),visibility .3s}
+.slide.active{opacity:1;visibility:visible;transform:none}
+.wrap{max-width:94rem;margin:0 auto}
+.sec-head{margin-bottom:1.5rem;max-width:62rem}
+.eyebrow{display:inline-flex;align-items:center;gap:.5rem;font:600 .78rem var(--mono);color:var(--info);letter-spacing:.14em;text-transform:uppercase}
+.eyebrow b{color:var(--fg-subtle);font-weight:500}
+h1{font-size:4.4rem;font-weight:700;letter-spacing:-.035em;line-height:1.02}
+h2{font-size:2.3rem;font-weight:700;letter-spacing:-.025em;line-height:1.15;margin:.35rem 0 .5rem}
+h3{font-size:1.15rem;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:.5rem}
+.lead{color:var(--fg-muted);font-size:1.15rem;line-height:1.55}
+.lead b,.lead strong{color:var(--fg);font-weight:600}
+.muted{color:var(--fg-muted)}
+.grid{display:grid;gap:1rem}.g2{grid-template-columns:1fr 1fr}.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}
+.row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+.hidden{display:none!important}
+.fade{animation:fade .35s var(--ease) both}@keyframes fade{from{opacity:0;transform:translateY(8px)}}
+
+/* ---------- Card + spotlight (ported from 21st.dev "Spotlight Card") ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.25rem 1.4rem}
+.spot{position:relative;overflow:hidden}
+.spot::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(420px circle at var(--x,50%) var(--y,50%),rgba(59,130,246,.11),transparent 45%)}
+.spot:hover::before{opacity:1}.spot>*{position:relative}
+
+/* ---------- Code ---------- */
+code{font-family:var(--mono);font-size:.9em;background:rgba(56,189,248,.1);color:var(--info);padding:.08rem .38rem;border-radius:4px}
+pre{font:500 1.05rem/1.6 var(--mono);background:var(--inset);border:1px solid var(--border);border-radius:var(--r);padding:.85rem 1rem;white-space:pre-wrap;margin:.5rem 0;color:#cbd5e1}
+.m{display:inline-block;font:700 .82em var(--mono);padding:.08rem .45rem;border-radius:4px;margin-right:.5rem;letter-spacing:.02em}
+.GET{background:rgba(56,189,248,.14);color:var(--info)}.POST{background:rgba(34,197,94,.14);color:var(--success)}
+.PATCH,.PUT{background:rgba(245,158,11,.14);color:var(--warning)}.DELETE{background:rgba(248,113,113,.14);color:var(--danger)}
+.k{color:#93c5fd}.s{color:#86efac}
+
+/* ---------- Terminal (ported from 21st.dev "Terminal") ---------- */
+.term{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.term-bar{display:flex;align-items:center;gap:.45rem;padding:.6rem .9rem;border-bottom:1px solid var(--border);background:var(--surface)}
+.term-bar i{width:.7rem;height:.7rem;border-radius:50%;background:#334155}
+.term-bar i:nth-child(1){background:#f87171}.term-bar i:nth-child(2){background:#fbbf24}.term-bar i:nth-child(3){background:#4ade80}
+.term-bar span{margin-left:.6rem;font:500 .78rem var(--mono);color:var(--fg-subtle)}
+.term-body{padding:1rem 1.1rem;font:500 .95rem/1.7 var(--mono);color:#cbd5e1;min-height:7rem}
+.term-body>div{animation:fade .25s var(--ease) both}
+.term-body .p{color:var(--success)}.term-body .err{color:var(--danger)}.term-body .wrn{color:var(--warning)}.term-body .ok{color:var(--success)}.term-body .dim{color:var(--fg-subtle)}
+.cursor{display:inline-block;width:.55em;height:1.05em;background:var(--info);vertical-align:text-bottom;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- S1 hero ---------- */
+.hero{display:grid;grid-template-columns:1.05fr 1fr;gap:3.5rem;align-items:center;min-height:100%}
+.case{display:inline-flex;align-items:center;gap:.55rem;font:600 .8rem var(--mono);color:var(--danger);border:1px solid rgba(248,113,113,.35);background:rgba(248,113,113,.07);padding:.35rem .75rem;border-radius:999px;letter-spacing:.08em;margin-bottom:1.3rem}
+.case .live{width:.5rem;height:.5rem;border-radius:50%;background:var(--danger);animation:pulse 1.8s infinite}
+@keyframes pulse{50%{opacity:.3}}
+h1 em{font-style:normal;color:var(--primary)}
+.subtitle{font:600 1.1rem var(--mono);color:var(--warning);letter-spacing:.04em;margin:1rem 0 1.2rem}
+.plan{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem 1rem;margin:1.6rem 0 2rem;counter-reset:s}
+.plan li{counter-increment:s;display:flex;gap:.6rem;align-items:center;color:var(--fg-muted);font-size:.95rem}
+.plan li::before{content:"0" counter(s);font:600 .78rem var(--mono);color:var(--info)}
+
+/* ---------- S2 flow ---------- */
+.flow{position:relative;display:flex;gap:.5rem;margin:.9rem 0 1rem}
+.node{flex:1;text-align:center;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:1rem .6rem .85rem;transition:border-color var(--dur),background var(--dur),transform var(--dur) var(--ease)}
+.node .ico{display:grid;place-items:center;width:2.8rem;height:2.8rem;margin:0 auto .5rem;border-radius:var(--r);background:rgba(56,189,248,.1);color:var(--info)}
+.node .ico .i{width:1.4rem;height:1.4rem}
+.node b{display:block;font:700 .85rem var(--mono);letter-spacing:.06em}
+.node small{display:block;color:var(--fg-muted);font-size:.8rem;line-height:1.35;margin-top:.3rem}
+.node.lit{border-color:var(--info);background:rgba(56,189,248,.08);transform:translateY(-3px)}
+.link{align-self:center;color:var(--fg-subtle)}
+#packet{position:absolute;left:0;top:0;transform:translate(-50%,-50%);padding:.28rem .7rem;border-radius:999px;font:700 .8rem var(--mono);background:var(--primary);color:#fff;opacity:0;transition:left .75s var(--ease),top .75s var(--ease),opacity .25s;pointer-events:none;z-index:2;white-space:nowrap;box-shadow:0 4px 16px rgba(59,130,246,.35)}
+#packet.back{background:var(--success);color:#052e14;box-shadow:0 4px 16px rgba(34,197,94,.3)}
+.analogy{list-style:none;margin-top:.6rem}
+.analogy li{display:grid;grid-template-columns:2.4rem 1fr;gap:.75rem;align-items:center;padding:.7rem 0;border-bottom:1px solid var(--border);line-height:1.4}
+.analogy li:last-child{border-bottom:0}
+.analogy .ico{display:grid;place-items:center;width:2.4rem;height:2.4rem;border-radius:var(--r-sm);background:var(--surface-2);border:1px solid var(--border);color:var(--fg-muted)}
+.analogy .hl{color:var(--info);font-weight:600}
+.concept h3{font-size:1rem;color:var(--fg)}.concept p{font-size:.88rem;color:var(--fg-muted);margin-top:.35rem;line-height:1.45}.concept pre{font-size:.85rem}
+.section-label{display:flex;align-items:center;gap:.75rem;margin:1.8rem 0 .9rem;font:600 .78rem var(--mono);color:var(--fg-subtle);letter-spacing:.14em;text-transform:uppercase}
+.section-label::after{content:"";flex:1;height:1px;background:var(--border)}
+
+/* ---------- S3 CRUD ---------- */
+.crud{--c:var(--primary);display:block;align-self:start;width:100%;text-align:left;border-top:3px solid var(--c);transition:border-color var(--dur),transform var(--dur) var(--ease)}
+.crud:hover{border-color:var(--border-strong);border-top-color:var(--c);transform:translateY(-3px)}
+.crud .top{display:flex;justify-content:space-between;align-items:flex-start}
+.crud .letter{font:700 3.6rem/1 var(--mono);color:var(--c)}
+.crud .chev{color:var(--fg-subtle);transition:transform var(--dur) var(--ease)}
+.crud[aria-expanded=true] .chev{transform:rotate(180deg)}
+.crud .op{font-size:1.4rem;font-weight:700;letter-spacing:.04em;margin:.6rem 0 .5rem}
+.crud .short{margin-top:.7rem;color:var(--fg-muted)}
+.crud .detail{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s var(--ease)}
+.crud .detail>div{overflow:hidden}
+.crud[aria-expanded=true] .detail{grid-template-rows:1fr}
+.crud .detail p{margin-top:.8rem;line-height:1.5;font-size:.95rem}.crud .detail p b{color:var(--fg)}
+.crud .detail .lbl{display:block;font:600 .72rem var(--mono);color:var(--fg-subtle);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.15rem}
+.hint{display:flex;align-items:center;justify-content:center;gap:.5rem;color:var(--fg-muted);margin-top:1.4rem}
+
+/* ---------- S4 challenges ---------- */
+.tabs{display:flex;gap:.25rem;padding:.25rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:1rem}
+.tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:.5rem;min-height:44px;border:0;background:none;border-radius:var(--r);color:var(--fg-muted);font-weight:600;font-size:.95rem;transition:background var(--dur),color var(--dur)}
+.tabs button:hover{color:var(--fg)}
+.tabs button[aria-selected=true]{background:var(--surface-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--border-strong)}
+.tabs .n{font:600 .75rem var(--mono);color:var(--fg-subtle)}
+.scen{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+.scen h3{font-size:1.45rem;font-weight:600}.scen h3 b{color:var(--info)}
+.panel{border-left:3px solid var(--c,var(--border))}
+.panel-h{display:flex;align-items:center;gap:.5rem;font:700 .78rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c);margin-bottom:.4rem}
+.bad{--c:var(--danger)}.warn{--c:var(--warning)}.good{--c:var(--success)}
+.q{display:flex;gap:.6rem;align-items:flex-start;margin-top:.9rem;padding:.75rem .9rem;border-radius:var(--r);background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2);line-height:1.45}
+.q .i{color:var(--info);margin-top:.15rem}
+.note{display:flex;gap:.6rem;align-items:flex-start;margin-top:.7rem;color:#fcd34d;line-height:1.45}.note .i{color:var(--warning);margin-top:.15rem}
+.locked{height:100%;min-height:11rem;display:flex;flex-direction:column;gap:.5rem;align-items:center;justify-content:center;text-align:center;color:var(--fg-muted);border:1.5px dashed var(--border-strong);border-radius:var(--r)}
+.locked .i{width:2rem;height:2rem;color:var(--fg-subtle)}
+.locked b{font-size:1.2rem;color:var(--fg)}
+.status-line{display:flex;align-items:center;gap:.5rem;font:700 1rem var(--mono);color:var(--success);margin-bottom:.3rem}
+.why{margin-top:1rem}
+.why ul{list-style:none}.why li{display:grid;grid-template-columns:1.2rem 1fr;gap:.6rem;padding:.4rem 0;line-height:1.5}
+.why li .i{color:var(--success);margin-top:.2rem}
+table{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:.4rem}
+th,td{padding:.6rem .7rem;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+thead th{font:600 .72rem var(--mono);color:var(--fg-subtle);letter-spacing:.1em;text-transform:uppercase}
+tbody th{color:var(--fg-muted);font-weight:500}
+td.x{color:var(--danger);font-family:var(--mono);font-size:.88rem}td.v{color:var(--success);font-family:var(--mono);font-size:.88rem}
+
+/* ---------- S5 status lab ---------- */
+.legend{display:flex;gap:1.5rem;margin-bottom:1rem;font-size:.92rem;color:var(--fg-muted);flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:.45rem}.legend b{font-family:var(--mono);color:var(--fg)}
+.sw{width:.65rem;height:.65rem;border-radius:2px}
+.lab{grid-template-columns:1.25fr 1fr;align-items:start}
+.codes{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.sc{--c:var(--success);padding:.8rem 1rem;border-left:3px solid var(--c)}
+.sc .top{display:flex;align-items:baseline;gap:.55rem}
+.sc .n{font:700 1.55rem var(--mono);color:var(--c)}.sc .t{font-weight:600}
+.sc p{font-size:.84rem;color:var(--fg-muted);margin-top:.2rem;line-height:1.4}
+.sc .ex{font-family:var(--mono);font-size:.78rem;color:#cbd5e1;margin-top:.35rem}
+.sc.warn{--c:var(--warning)}.sc.err{--c:var(--danger)}
+.quiz-meta{display:flex;justify-content:space-between;align-items:center}
+.pips{display:flex;gap:.3rem}.pips i{width:1.6rem;height:4px;border-radius:2px;background:var(--border-strong)}.pips i.on{background:var(--primary)}
+.opt{display:flex;align-items:center;gap:.75rem;width:100%;text-align:left;font-size:1.05rem;margin:.5rem 0;padding:.75rem 1rem;min-height:48px;border-radius:var(--r);border:1px solid var(--border-strong);background:var(--surface-2);color:var(--fg);transition:border-color var(--dur),background var(--dur)}
+.opt .key{display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:var(--r-sm);border:1px solid var(--border-strong);font:600 .8rem var(--mono);color:var(--fg-muted)}
+.opt:hover:not(:disabled){border-color:var(--primary)}
+.opt:disabled{cursor:default}
+.opt.ok{background:rgba(34,197,94,.1);border-color:var(--success)}.opt.ok .key{background:var(--success);border-color:var(--success);color:#052e14}
+.opt.ko{background:rgba(248,113,113,.1);border-color:var(--danger)}.opt.ko .key{background:var(--danger);border-color:var(--danger);color:#3b0a0a}
+.fb{display:flex;gap:.6rem;align-items:flex-start;margin-top:.7rem;padding:.8rem 1rem;border-radius:var(--r);line-height:1.5}
+.fb .i{margin-top:.2rem}
+.fb.ok{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.4)}.fb.ok .i{color:var(--success)}
+.fb.ko{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.4)}.fb.ko .i{color:var(--danger)}
+.vs{margin-top:1rem}
+.vs-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.7rem}
+.vs-grid>div{padding:.8rem .9rem;border-radius:var(--r);background:var(--surface-2);border:1px solid var(--border)}
+.vs-grid .code{font:700 1.05rem var(--mono);color:var(--warning)}
+.vs-grid .say{font-weight:600;margin:.25rem 0}
+.vs-grid p{font-size:.86rem;color:var(--fg-muted);line-height:1.45}
+
+/* ---------- S6 final ---------- */
+.fix{display:grid;grid-template-columns:1fr 2rem 1fr 1.25fr;gap:1rem;align-items:center;margin-bottom:.7rem;width:100%;background:none;border:0;text-align:left;padding:0;border-radius:var(--r)}
+.fix pre{margin:0;border-left:3px solid var(--danger)}
+.fix .arr{color:var(--fg-subtle);justify-self:center}
+.fix .ans{border-left-color:var(--success);filter:blur(7px);opacity:.35;transition:filter .45s var(--ease),opacity .45s}
+.fix .why2{display:flex;gap:.5rem;align-items:flex-start;color:var(--fg-muted);line-height:1.45;opacity:0;transform:translateX(-6px);transition:opacity .45s,transform .45s var(--ease)}
+.fix .why2 .i{color:var(--success);margin-top:.2rem}
+.fix.shown .ans{filter:none;opacity:1}.fix.shown .why2{opacity:1;transform:none}
+.fix-head{display:grid;grid-template-columns:1fr 2rem 1fr 1.25fr;gap:1rem;font:600 .72rem var(--mono);color:var(--fg-subtle);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.4rem}
+.done-wrap{text-align:center;max-width:84rem;margin:0 auto}
+.trophy{display:grid;place-items:center;width:4.5rem;height:4.5rem;margin:0 auto 1rem;border-radius:50%;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);color:var(--success)}
+.trophy .i{width:2.2rem;height:2.2rem}
+.stamp{display:inline-block;font:700 1rem var(--mono);color:var(--success);border:2px solid var(--success);padding:.35rem 1rem;border-radius:var(--r-sm);transform:rotate(-3deg);letter-spacing:.14em;margin:.9rem 0 1.6rem;animation:stamp .5s var(--ease) both}
+@keyframes stamp{from{transform:scale(1.8) rotate(-3deg);opacity:0}}
+.prac{text-align:left}
+.prac .num{font:700 .8rem var(--mono);color:var(--info)}
+.prac h3{margin:.3rem 0 .35rem;font-size:1.02rem}
+.prac p{color:var(--fg-muted);font-size:.88rem;line-height:1.45}
+.quote{margin:1.6rem auto 0;max-width:60rem;font-size:1.4rem;line-height:1.5;padding:1.1rem 1.5rem;text-align:left;border-left:3px solid var(--primary);background:var(--surface);border-radius:0 var(--r-lg) var(--r-lg) 0}
+.quote b{color:var(--info);font-weight:600}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(max-width:1100px){.step .lbl{display:none}}
+@media(max-width:900px){
+  .g2,.g4,.g5,.lab,.codes,.hero,.vs-grid,.plan{grid-template-columns:1fr}
+  .fix,.fix-head{grid-template-columns:1fr}.fix-head,.fix .arr{display:none}
+  .brand small,.kbd-hint{display:none}
+  header,footer{padding:.6rem 1rem;gap:1rem}.slide{padding:1.2rem 1rem}
+  h1{font-size:2.6rem}h2{font-size:1.7rem}.flow{flex-direction:column}.link{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+<!-- Icon sprite (Lucide-style, 24px, stroke 2) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3 20 12 6 21Z"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M3 18h18M5 18a7 7 0 0 1 14 0M12 9V7M10 7h4"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 19A1.5 1.5 0 0 0 5.8 21h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M7 21h10M4 7h16M7 7l-3 7a3 3 0 0 0 6 0ZM17 7l-3 7a3 3 0 0 0 6 0Z"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="i-pointer" viewBox="0 0 24 24"><path d="m9 9 5 12 1.8-5.2L21 14Z"/><path d="M7.2 2.2 8 5.1M5.1 8l-2.9-.8M14 4.1 12 6M6 12l-1.9 2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+</svg>
+
+<header>
+  <div class="brand"><span class="mark"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span>REST API Detective<small>CASE #001</small></div>
+  <nav id="progress" aria-label="Progression de la mission"></nav>
+  <button class="btn secondary" onclick="fullscreen()" aria-label="Plein écran (touche F)"><svg class="i" aria-hidden="true"><use href="#i-max"/></svg>Plein écran</button>
+  <div class="bar" id="bar"></div>
+</header>
+
+<main>
+<!-- ============ 1. WELCOME ============ -->
+<section class="slide" id="s1" aria-label="Bienvenue">
+  <div class="wrap hero">
+    <div>
+      <div class="case"><span class="live"></span>DOSSIER OUVERT · ENQUÊTE EN COURS</div>
+      <h1>REST API<br><em>DETECTIVE</em></h1>
+      <div class="subtitle">CASE #001 — THE BROKEN LIBRARY API</div>
+      <p class="lead">Une bibliothèque universitaire a une <b>API cassée</b>. Les étudiants ne peuvent pas correctement consulter, créer, modifier ou supprimer les livres. <b>Votre mission :</b> enquêter sur l'API, découvrir les mauvaises pratiques et la réparer.</p>
+      <ol class="plan">
+        <li>La mission</li><li>Comprendre une API</li><li>Le CRUD</li><li>L'enquête</li><li>Codes HTTP</li><li>Mission finale</li>
+      </ol>
+      <div class="row">
+        <button class="btn lg" onclick="go(1)"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg>Commencer l'enquête</button>
+        <span class="muted kbd-hint"><span class="kbd">←</span> <span class="kbd">→</span> naviguer · <span class="kbd">F</span> plein écran</span>
+      </div>
+    </div>
+    <div class="term spot">
+      <div class="term-bar"><i></i><i></i><i></i><span>detective@bibliotheque — ~/case-001</span></div>
+      <div class="term-body" id="intro" aria-live="off" style="min-height:19rem"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2. API ============ -->
+<section class="slide" id="s2" aria-label="Comprendre une API">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow"><b>02 /</b> Indice n°1 — Les bases</div>
+      <h2>Qu'est-ce qu'une API ?</h2>
+      <p class="lead"><b>API</b> (Application Programming Interface) : un <b>intermédiaire</b> qui permet à deux programmes de communiquer.</p>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1.75fr">
+      <div class="card spot">
+        <h3>L'analogie du restaurant</h3>
+        <ul class="analogy">
+          <li><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-user"/></svg></span><span><b>Le client</b> = vous, l'application de l'étudiant</span></li>
+          <li><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span><span><b>Le serveur du restaurant</b> prend la commande et rapporte le plat = <span class="hl">l'API</span></span></li>
+          <li><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-flame"/></svg></span><span><b>La cuisine</b> prépare le plat = le serveur informatique</span></li>
+          <li><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-archive"/></svg></span><span><b>La réserve</b> où sont les ingrédients = la base de données</span></li>
+        </ul>
+        <p class="muted" style="margin-top:.8rem;font-size:.92rem">Vous n'entrez jamais en cuisine : vous passez par le serveur. Avec une API, c'est pareil.</p>
+      </div>
+      <div class="card spot">
+        <div class="row" style="justify-content:space-between">
+          <h3>Le trajet d'une requête</h3>
+          <button class="btn" id="simbtn" onclick="simulate()"><svg class="i" aria-hidden="true"><use href="#i-zap"/></svg>Simuler une requête</button>
+        </div>
+        <div class="flow" id="flow">
+          <div class="node"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-monitor"/></svg></div><b>CLIENT</b><small>L'application qui envoie la demande.</small></div>
+          <svg class="i link" aria-hidden="true"><use href="#i-swap"/></svg>
+          <div class="node"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-plug"/></svg></div><b>REST API</b><small>La porte d'entrée : reçoit et transmet la demande.</small></div>
+          <svg class="i link" aria-hidden="true"><use href="#i-swap"/></svg>
+          <div class="node"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-server"/></svg></div><b>SERVEUR</b><small>L'ordinateur qui traite la demande.</small></div>
+          <svg class="i link" aria-hidden="true"><use href="#i-swap"/></svg>
+          <div class="node"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg></div><b>BASE DE DONNÉES</b><small>L'endroit où les livres sont stockés.</small></div>
+          <div id="packet"></div>
+        </div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span>journal — GET /api/books</span></div>
+          <div class="term-body" id="simlog" aria-live="polite"><div class="dim">// Cliquez sur « Simuler une requête »</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="section-label">Le vocabulaire du détective</div>
+    <div class="grid g5">
+      <div class="card concept spot"><h3>REST API</h3><p>Une façon <b>standard</b> d'organiser une API : des URLs claires + des méthodes HTTP.</p><pre><span class="m GET">GET</span>/api/books</pre></div>
+      <div class="card concept spot"><h3>Ressource</h3><p>La « chose » qu'on manipule. Ici : <b>les livres</b>.</p><pre>/api/books
+/api/books/42</pre></div>
+      <div class="card concept spot"><h3>Requête HTTP</h3><p>Le message du client : une <b>méthode</b> + une <b>URL</b> (+ parfois des données).</p><pre><span class="m GET">GET</span>/api/books/42</pre></div>
+      <div class="card concept spot"><h3>Réponse HTTP</h3><p>Le message du serveur : un <b>code de statut</b> + des données.</p><pre><span class="s">200 OK</span></pre></div>
+      <div class="card concept spot"><h3>JSON</h3><p>Un format texte simple pour échanger des données : des paires <b>clé : valeur</b>.</p><pre>{ <span class="k">"title"</span>: <span class="s">"Clean Code"</span> }</pre></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. CRUD ============ -->
+<section class="slide" id="s3" aria-label="CRUD">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow"><b>03 /</b> Indice n°2 — Les 4 opérations</div>
+      <h2>CRUD : gérer des données</h2>
+      <p class="lead"><b>CRUD</b> = les 4 opérations de base pour gérer des données. Chacune correspond à une <b>méthode HTTP</b>, le « verbe » de la requête.</p>
+    </div>
+    <div class="grid g4" id="crud"></div>
+    <p class="hint"><svg class="i" aria-hidden="true"><use href="#i-pointer"/></svg>Cliquez sur une carte pour voir sa signification et un exemple à la bibliothèque.</p>
+  </div>
+</section>
+
+<!-- ============ 4. CHALLENGES ============ -->
+<section class="slide" id="s4" aria-label="L'enquête CRUD">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow"><b>04 /</b> Enquête principale</div>
+      <h2>L'enquête CRUD</h2>
+      <p class="lead">4 requêtes suspectes ont été trouvées. Pour chacune : <b>le public identifie l'erreur</b>, puis on révèle la solution.</p>
+    </div>
+    <div class="tabs" id="chtabs" role="tablist" aria-label="Défis"></div>
+    <div id="chbox"></div>
+  </div>
+</section>
+
+<!-- ============ 5. STATUS LAB ============ -->
+<section class="slide" id="s5" aria-label="Codes HTTP">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow"><b>05 /</b> Laboratoire</div>
+      <h2>Le labo des réponses HTTP</h2>
+      <p class="lead">Chaque réponse contient un <b>code de statut</b> : un nombre qui dit au client ce qui s'est passé.</p>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--success)"></i><b>2xx</b> Succès</span>
+      <span><i class="sw" style="background:var(--warning)"></i><b>4xx</b> Erreur du client — la demande pose problème</span>
+      <span><i class="sw" style="background:var(--danger)"></i><b>5xx</b> Erreur du serveur</span>
+    </div>
+    <div class="grid lab">
+      <div class="codes" id="codes"></div>
+      <div>
+        <div class="card" id="quiz"></div>
+        <div class="card vs">
+          <h3><svg class="i" aria-hidden="true"><use href="#i-scale"/></svg>401 ou 403 ? Ne pas confondre</h3>
+          <div class="vs-grid">
+            <div><div class="code">401</div><div class="say">« Qui êtes-vous ? »</div><p>Pas <b>authentifié</b> : vous n'avez pas prouvé qui vous êtes (pas connecté, identifiants absents ou invalides).<br><i>Vous entrez sans carte de bibliothèque.</i></p></div>
+            <div><div class="code">403</div><div class="say">« Pas le droit. »</div><p>Authentifié, mais pas <b>autorisé</b> : le serveur sait qui vous êtes, l'action vous est interdite.<br><i>Votre carte étudiant n'ouvre pas la réserve du personnel.</i></p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. FINAL ============ -->
+<section class="slide" id="s6" aria-label="Mission finale">
+  <div class="wrap" id="boss">
+    <div class="sec-head" style="max-width:none">
+      <div class="eyebrow"><b>06 /</b> Boss final</div>
+      <h2>FINAL MISSION — REPAIR THE STUDENTS API</h2>
+      <p class="lead">Vous êtes maintenant responsable d'une API universitaire. Un développeur débutant a écrit ces requêtes. <b>Pouvez-vous les réparer ?</b> Votez à main levée pour chaque ligne : quelle méthode, quelle URL ?</p>
+    </div>
+    <div class="fix-head"><span>Requête du débutant</span><span></span><span>Correction</span><span>Pourquoi</span></div>
+    <div id="fixes"></div>
+    <div class="row" style="margin-top:1.2rem">
+      <button class="btn success" onclick="revealAll()"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg>Révéler la solution</button>
+      <button class="btn secondary" onclick="renderFixes()"><svg class="i" aria-hidden="true"><use href="#i-reset"/></svg>Réinitialiser</button>
+      <button class="btn" onclick="finish()" style="margin-left:auto"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg>Mission accomplie<svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+    </div>
+    <p class="muted" style="margin-top:.8rem;font-size:.9rem">Astuce : cliquez sur une ligne pour la révéler seule.</p>
+  </div>
+  <div id="complete" class="done-wrap hidden">
+    <div class="trophy fade"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg></div>
+    <h2 style="font-size:3rem">Mission accomplie</h2>
+    <div class="stamp">CASE #001 — RÉSOLU</div>
+    <div class="grid g4" id="practices"></div>
+    <div class="quote">« Une bonne API REST, ce n'est pas seulement une API qui fonctionne. C'est une API <b>claire</b>, <b>cohérente</b>, <b>sécurisée</b> et <b>prévisible</b>. »</div>
+    <div class="row" style="justify-content:center;margin-top:1.4rem"><button class="btn secondary" onclick="restart()"><svg class="i" aria-hidden="true"><use href="#i-reset"/></svg>Recommencer l'enquête</button></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <button class="btn secondary" id="prev" onclick="go(cur-1)"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg>Précédent</button>
+  <span id="counter" aria-live="polite"></span>
+  <button class="btn" id="next" onclick="go(cur+1)">Suivant<svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+</footer>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const ic=n=>`<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const req=s=>{const [m,...r]=s.split(' ');return `<span class="m ${m}">${m}</span>${r.join(' ')}`};
+const json=s=>s.replace(/("[^"]+")(\s*:)/g,'<span class="k">$1</span>$2').replace(/:\s*("[^"]*")/g,': <span class="s">$1</span>');
+
+/* ---------- Navigation ---------- */
+const slides=$$('.slide');let cur=0;
+const names=['Mission','API','CRUD','Enquête','Codes HTTP','Finale'];
+$('#progress').innerHTML=names.map((n,i)=>`${i?'<span class="sep"></span>':''}<button class="step" onclick="go(${i})" aria-label="Section ${i+1} : ${n}"><span class="dot">${i+1}</span><span class="lbl">${n}</span></button>`).join('');
+function go(i){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,k)=>{s.classList.toggle('active',k===cur);s.inert=k!==cur});
+  $$('.step').forEach((b,k)=>{b.classList.toggle('active',k===cur);b.classList.toggle('done',k<cur);b.toggleAttribute('aria-current',k===cur)});
+  $$('.sep').forEach((s,k)=>s.classList.toggle('done',k<cur));
+  $('#bar').style.width=(cur/(slides.length-1)*100)+'%';
+  $('#counter').textContent=`SECTION ${String(cur+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`;
+  $('#prev').disabled=cur===0;$('#next').disabled=cur===slides.length-1;
+  slides[cur].scrollTop=0;
+}
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown'].includes(e.key)){e.preventDefault();go(cur+1)}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+  else if(e.key.toLowerCase()==='f')fullscreen();
+});
+function fullscreen(){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{})}
+/* Spotlight: pointer-following glow (pattern from 21st.dev Spotlight Card) */
+document.addEventListener('pointermove',e=>{const c=e.target.closest('.spot');if(!c)return;const r=c.getBoundingClientRect();c.style.setProperty('--x',e.clientX-r.left+'px');c.style.setProperty('--y',e.clientY-r.top+'px')});
+
+/* ---------- 1. Intro terminal (typing pattern from 21st.dev Terminal) ---------- */
+async function typeIntro(){
+  const el=$('#intro');el.innerHTML='';
+  const L=[['$','cat dossier_001.txt'],
+    ['','Une bibliothèque universitaire a une API cassée.'],
+    ['','Les étudiants ne peuvent pas consulter, créer, modifier ou supprimer les livres correctement.'],
+    ['$','./scan --api bibliotheque'],
+    ['err','[ERREUR] GET /api/createBook      → mauvaise méthode'],
+    ['err','[ERREUR] GET /api/deleteBook/42   → action dangereuse'],
+    ['wrn','[ALERTE] GET /api/getAllBooks     → URL peu cohérente'],
+    ['ok','Mission : enquêter · détecter · réparer.']];
+  for(const [t,s] of L){
+    const d=document.createElement('div');el.appendChild(d);
+    if(t==='$'){d.innerHTML='<span class="p">$</span> ';for(const ch of s){d.append(ch);await wait(RM?0:32)}await wait(RM?0:250)}
+    else{d.className=t;d.textContent=s;await wait(RM?0:280)}
+  }
+  el.insertAdjacentHTML('beforeend','<div><span class="p">$</span> <span class="cursor"></span></div>');
+}
+
+/* ---------- 2. Request simulation ---------- */
+let simBusy=false;
+async function simulate(){
+  if(simBusy)return;simBusy=true;$('#simbtn').disabled=true;
+  const flow=$('#flow'),p=$('#packet'),nodes=$$('#flow .node'),log=$('#simlog');
+  const fr=flow.getBoundingClientRect();
+  const pos=nodes.map(n=>{const r=n.getBoundingClientRect();return[r.left-fr.left+r.width/2,r.top-fr.top]});
+  const say=(t,c='')=>log.insertAdjacentHTML('beforeend',`<div class="${c}">${t}</div>`);
+  const move=async(i,t,c)=>{nodes.forEach((n,k)=>n.classList.toggle('lit',k===i));p.style.left=pos[i][0]+'px';p.style.top=pos[i][1]+'px';say(t,c);await wait(1050)};
+  log.innerHTML='';p.className='';p.textContent='GET /api/books';
+  p.style.transition='none';p.style.left=pos[0][0]+'px';p.style.top=pos[0][1]+'px';p.offsetWidth;p.style.transition='';p.style.opacity=1;
+  await move(0,'<span class="p">→</span> client  : « Je veux la liste des livres » GET /api/books');
+  await move(1,'<span class="p">→</span> api     : reçoit la requête, la transmet au serveur');
+  await move(2,'<span class="p">→</span> serveur : traite la demande, interroge la base');
+  await move(3,'<span class="p">→</span> base    : 2 livres trouvés');
+  p.className='back';p.textContent='200 OK · JSON';
+  await move(2,'<span class="ok">←</span> serveur : prépare la réponse en JSON');
+  await move(1,'<span class="ok">←</span> api     : renvoie 200 OK');
+  await move(0,'<span class="ok">←</span> client  : [{"title":"Clean Code"}, {"title":"Refactoring"}]','ok');
+  nodes.forEach(n=>n.classList.remove('lit'));p.style.opacity=0;
+  simBusy=false;$('#simbtn').disabled=false;
+}
+
+/* ---------- 3. CRUD ---------- */
+const CRUD=[
+ ['C','CREATE','POST','var(--success)','Ajouter un livre','Créer une <b>nouvelle</b> donnée.','Le bibliothécaire ajoute le nouveau livre « Clean Code » au catalogue.','POST /api/books'],
+ ['R','READ','GET','var(--info)','Lire les livres','Consulter des données, <b>sans rien modifier</b>.','Un étudiant consulte la liste des livres disponibles.','GET /api/books'],
+ ['U','UPDATE','PUT / PATCH','var(--warning)','Modifier un livre','Changer une donnée <b>qui existe déjà</b>.','Le bibliothécaire corrige le titre du livre n°42.','PATCH /api/books/42'],
+ ['D','DELETE','DELETE','var(--danger)','Supprimer un livre','<b>Retirer</b> une donnée.','Un livre abîmé est retiré du catalogue.','DELETE /api/books/42']];
+$('#crud').innerHTML=CRUD.map(c=>`<button class="card crud spot" style="--c:${c[3]}" aria-expanded="false" onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')!=='true')">
+ <div class="top"><span class="letter">${c[0]}</span><span class="chev">${ic('chev')}</span></div>
+ <div class="op">${c[1]}</div><span class="m ${c[2].split(' ')[0]}">${c[2]}</span><p class="short">${c[4]}</p>
+ <div class="detail"><div><p><span class="lbl">Signification</span>${c[5]}</p><p><span class="lbl">À la bibliothèque</span>${c[6]}</p><pre>${req(c[7])}</pre></div></div></button>`).join('');
+
+/* ---------- 4. Challenges ---------- */
+const CH=[
+ {op:'CREATE',scen:"Un étudiant veut <b>ajouter</b> un livre à la bibliothèque.",bad:'GET /api/createBook',
+  good:['POST /api/books'],body:'{\n  "title": "Clean Code",\n  "author": "Robert Martin"\n}',
+  res:'201 Created',resBody:'{\n  "id": 43,\n  "title": "Clean Code",\n  "author": "Robert Martin"\n}',
+  cmp:[['Méthode','GET (= lire)','POST (= créer)'],['URL','/createBook — une action','/books — une ressource'],['Réponse','—','201 Created']],
+  why:["<b>POST</b> sert à <b>créer</b> une nouvelle ressource.","<b>GET</b> sert seulement à <b>lire</b> : il ne doit jamais modifier les données.","L'URL désigne <b>la ressource</b> (<code>/books</code>), pas l'action (<code>createBook</code>) : la méthode dit déjà « créer ».","Les données du livre voyagent dans le <b>corps</b> (body) de la requête, en JSON."]},
+ {op:'READ',soft:true,scen:"Un étudiant veut <b>voir</b> tous les livres disponibles.",bad:'GET /api/getAllBooks',
+  note:"Attention : cette URL <b>fonctionne techniquement</b>. Elle n'est pas interdite, mais elle est <b>moins cohérente</b> avec les conventions REST.",
+  good:['GET /api/books','GET /api/books/42'],
+  res:'200 OK',resBody:'[\n  { "id": 42, "title": "Clean Code" },\n  { "id": 43, "title": "Refactoring" }\n]',
+  cmp:[['Méthode','GET','GET'],['URL','/getAllBooks — « get » répété','/books — la ressource'],['Un livre précis','/getBookById?id=42','/books/42']],
+  why:["La méthode <b>GET</b> dit déjà « lire » : inutile de répéter <code>get</code> dans l'URL.","<code>/api/books</code> = la <b>collection</b> de tous les livres.","<code>/api/books/42</code> = <b>un livre précis</b>, identifié par son id (42).","Résultat : une API <b>prévisible</b>, où l'on devine les URLs sans lire la documentation."]},
+ {op:'UPDATE',scen:"Un administrateur veut <b>changer le titre</b> du livre 42.",bad:'GET /api/updateBook/42',
+  good:['PATCH /api/books/42'],body:'{\n  "title": "Clean Code - Updated Edition"\n}',
+  res:'200 OK',resBody:'{\n  "id": 42,\n  "title": "Clean Code - Updated Edition",\n  "author": "Robert Martin"\n}',
+  cmp:[['Méthode','GET (= lire)','PATCH (= modifier une partie)'],['URL','/updateBook/42 — une action','/books/42 — la ressource'],['PUT vs PATCH','PUT : tout remplacer','PATCH : modifier un morceau']],
+  why:["<b>GET</b> ne doit jamais modifier des données.","<b>PATCH</b> modifie <b>une partie</b> de la ressource : ici, seulement le titre.","<b>PUT</b> remplace <b>toute</b> la ressource : il faut renvoyer le livre complet (titre <b>et</b> auteur…).","L'URL <code>/api/books/42</code> désigne le livre ; la méthode dit ce qu'on en fait."]},
+ {op:'DELETE',scen:"Un administrateur veut <b>supprimer</b> le livre 42.",bad:'GET /api/deleteBook/42',
+  good:['DELETE /api/books/42'],
+  res:'204 No Content',resBody:'(corps vide — le livre 42 a bien été supprimé)',
+  cmp:[['Méthode','GET (= lire)','DELETE (= supprimer)'],['URL','/deleteBook/42 — une action','/books/42 — la ressource'],['Réponse','—','204 No Content']],
+  why:["<b>DELETE</b> est la méthode faite pour <b>supprimer</b>.","<b>GET</b> doit rester « sans danger » : il ne fait que lire. Navigateurs, moteurs de recherche ou aperçus de liens appellent des GET automatiquement… et pourraient <b>supprimer des livres par accident</b>.","<b>204 No Content</b> = « suppression réussie, je n'ai rien à vous renvoyer »."]}];
+$('#chtabs').innerHTML=CH.map((c,i)=>`<button role="tab" onclick="renderCh(${i})"><span class="n">0${i+1}</span>${c.op}</button>`).join('');
+let chi=0;
+function renderCh(i){
+  chi=i;const c=CH[i];
+  $$('#chtabs button').forEach((b,k)=>b.setAttribute('aria-selected',k===i));
+  $('#chbox').innerHTML=`
+  <div class="card scen fade"><div><div class="eyebrow">${ic('clip')}Scénario · Défi ${i+1} / 4</div><h3 style="margin-top:.35rem">${c.scen}</h3></div>
+   <div class="row"><button class="btn success" onclick="reveal()">${ic('search')}Révéler la réponse</button><button class="btn secondary" onclick="renderCh(chi)">${ic('reset')}Réinitialiser</button>${i<3?`<button class="btn secondary" onclick="renderCh(${i+1})">Défi suivant${ic('right')}</button>`:`<button class="btn secondary" onclick="go(4)">Section suivante${ic('right')}</button>`}</div></div>
+  <div class="grid g2 fade">
+   <div class="card panel ${c.soft?'warn':'bad'}"><div class="panel-h">${ic(c.soft?'alert':'x-circle')}${c.soft?'Moins RESTful':'Requête suspecte'}</div><pre>${req(c.bad)}</pre>
+    <div class="q">${ic('users')}<span><b>Question au public :</b> qu'est-ce qui ne va pas ? Quelle méthode et quelle URL faudrait-il ?</span></div>${c.note?`<p class="note">${ic('alert')}<span>${c.note}</span></p>`:''}</div>
+   <div class="card panel good"><div class="locked" id="locked">${ic('lock')}<b>Solution verrouillée</b><span>Laissez le public répondre, puis révélez.</span></div>
+    <div id="sol" class="hidden"><div class="panel-h">${ic('check-circle')}Bonne requête</div><pre>${c.good.map(req).join('\n')}${c.body?'\n\n'+json(c.body):''}</pre>
+     <div class="term"><div class="term-bar"><i></i><i></i><i></i><span>réponse du serveur</span></div><div class="term-body" id="resp" style="min-height:4rem" aria-live="polite"></div></div></div></div>
+  </div>
+  <div class="card why hidden" id="why"><div class="grid g2">
+   <div><h3>${ic('bulb')}Pourquoi ?</h3><ul>${c.why.map(w=>`<li>${ic('check')}<span>${w}</span></li>`).join('')}</ul></div>
+   <div><h3>${ic('scale')}Comparaison</h3><table><thead><tr><th></th><th>Avant</th><th>Après</th></tr></thead><tbody>${c.cmp.map(r=>`<tr><th>${r[0]}</th><td class="x">${r[1]}</td><td class="v">${r[2]}</td></tr>`).join('')}</tbody></table></div>
+  </div></div>`;
+}
+async function reveal(){
+  const sol=$('#sol');if(!sol.classList.contains('hidden'))return;
+  const c=CH[chi];$('#locked').classList.add('hidden');sol.classList.remove('hidden');sol.classList.add('fade');
+  const r=$('#resp');r.innerHTML='<div class="dim">Envoi de la requête…</div>';
+  await wait(800);
+  r.innerHTML=`<div class="status-line">${ic('check-circle')}HTTP/1.1 ${c.res}</div><div style="white-space:pre-wrap">${c.resBody.startsWith('(')?`<span class="dim">${c.resBody}</span>`:json(c.resBody)}</div>`;
+  $('#why').classList.remove('hidden');$('#why').classList.add('fade');
+}
+
+/* ---------- 5. Status codes + quiz ---------- */
+const SC=[['200','OK','Tout s\'est bien passé.','GET /api/books',''],
+ ['201','Created','Une nouvelle ressource a été créée.','POST /api/books',''],
+ ['204','No Content','Succès, rien à renvoyer.','DELETE /api/books/42',''],
+ ['400','Bad Request','Requête invalide ou mal formée.','POST /api/books sans titre','warn'],
+ ['401','Unauthorized','Pas authentifié : identifiants absents ou invalides.','Supprimer sans être connecté','warn'],
+ ['403','Forbidden','Authentifié, mais pas autorisé.','Étudiant qui supprime un livre','warn'],
+ ['404','Not Found','La ressource n\'existe pas.','GET /api/books/9999','warn'],
+ ['500','Internal Server Error','Le serveur a planté : le problème vient de lui.','Bug dans le code serveur','err']];
+$('#codes').innerHTML=SC.map(s=>`<div class="card sc spot ${s[4]}"><div class="top"><span class="n">${s[0]}</span><span class="t">${s[1]}</span></div><p>${s[2]}</p><div class="ex">${s[3]}</div></div>`).join('');
+const QZ=[
+ {q:"Un étudiant envoie <code>POST /api/books</code> et le livre est bien ajouté. Quel code le serveur doit-il renvoyer ?",o:['200 OK','201 Created','404 Not Found'],a:1,e:"<b>201 Created</b> : une nouvelle ressource (le livre) a été créée. 200 fonctionnerait, mais 201 est plus précis."},
+ {q:"Un visiteur <b>non connecté</b> essaie de supprimer un livre. Quel code ?",o:['401 Unauthorized','403 Forbidden','500 Internal Server Error'],a:0,e:"<b>401</b> : le serveur ne sait pas qui vous êtes. Il faut d'abord s'authentifier (se connecter)."},
+ {q:"Un étudiant <b>connecté</b> (mais pas administrateur) essaie de supprimer un livre. Quel code ?",o:['401 Unauthorized','403 Forbidden','204 No Content'],a:1,e:"<b>403</b> : le serveur sait qui vous êtes, mais vous n'avez pas la permission. Être connecté ≠ avoir le droit."}];
+let qi=0;
+function renderQuiz(){
+  const z=QZ[qi];
+  $('#quiz').innerHTML=`<div class="quiz-meta"><div class="eyebrow">${ic('flask')}Quiz · Question ${qi+1} / ${QZ.length}</div><div class="pips">${QZ.map((_,k)=>`<i class="${k<=qi?'on':''}"></i>`).join('')}</div></div>
+   <h3 style="display:block;margin:.7rem 0 .4rem;font-size:1.2rem;line-height:1.45">${z.q}</h3>
+   ${z.o.map((o,k)=>`<button class="opt" onclick="answer(${k})"><span class="key">${'ABC'[k]}</span>${o}</button>`).join('')}<div id="fb" aria-live="polite"></div>`;
+}
+function answer(k){
+  const z=QZ[qi],opts=$$('#quiz .opt');opts.forEach(b=>b.disabled=true);
+  opts[z.a].classList.add('ok');if(k!==z.a)opts[k].classList.add('ko');
+  const ok=k===z.a,last=qi===QZ.length-1;
+  $('#fb').innerHTML=`<div class="fb fade ${ok?'ok':'ko'}">${ic(ok?'check-circle':'x-circle')}<span><b>${ok?'Correct.':'Pas tout à fait.'}</b> ${z.e}</span></div>
+   <div class="row" style="margin-top:.8rem">${last?`<span class="muted">Quiz terminé.</span><button class="btn secondary" onclick="qi=0;renderQuiz()">${ic('reset')}Recommencer</button>`:`<button class="btn" onclick="qi++;renderQuiz()">Question suivante${ic('right')}</button>`}</div>`;
+}
+
+/* ---------- 6. Final boss ---------- */
+const FX=[['GET /getAllStudents','GET /students','Lire = GET. « getAll » est inutile : l\'URL nomme la ressource.'],
+ ['GET /createStudent','POST /students','Créer = POST. GET ne doit jamais créer de données.'],
+ ['GET /updateStudent/12','PATCH /students/12','Modifier une partie = PATCH (ou PUT pour tout remplacer).'],
+ ['GET /deleteStudent/12','DELETE /students/12','Supprimer = DELETE. GET ne doit jamais supprimer.']];
+function renderFixes(){
+  $('#fixes').innerHTML=FX.map((f,i)=>`<button class="fix" onclick="this.classList.add('shown')" aria-label="Révéler la correction ${i+1}"><pre>${req(f[0])}</pre><span class="arr">${ic('right')}</span><pre class="ans">${req(f[1])}</pre><span class="why2">${ic('check')}<span>${f[2]}</span></span></button>`).join('');
+}
+async function revealAll(){for(const r of $$('.fix')){if(!r.classList.contains('shown')){r.classList.add('shown');await wait(400)}}}
+const PR=[['URLs claires','Des URLs orientées ressource : <code>/books</code>, <code>/books/42</code>.'],
+ ['Bonnes méthodes HTTP','GET lire, POST créer, PUT/PATCH modifier, DELETE supprimer.'],
+ ['Bons codes de statut','201 après une création, 404 si introuvable, 403 si interdit…'],
+ ['Valider les données','Vérifier ce qui arrive : un livre sans titre → 400.'],
+ ['Authentification & autorisation','Savoir <b>qui</b> vous êtes (401) et ce que vous avez <b>le droit</b> de faire (403).'],
+ ['Réponses cohérentes','Toujours le même format JSON, partout dans l\'API.'],
+ ['Erreurs claires','Un message utile : <code>{"error": "Le titre est obligatoire"}</code>.']];
+$('#practices').innerHTML=PR.map((p,i)=>`<div class="card prac spot fade" style="animation-delay:${i*60}ms"><span class="num">0${i+1}</span><h3>${p[0]}</h3><p>${p[1]}</p></div>`).join('');
+function finish(){$('#boss').classList.add('hidden');$('#complete').classList.remove('hidden');$('#s6').scrollTop=0}
+function restart(){$('#boss').classList.remove('hidden');$('#complete').classList.add('hidden');renderFixes();renderCh(0);qi=0;renderQuiz();$$('.crud').forEach(c=>c.setAttribute('aria-expanded','false'));$('#simlog').innerHTML='<div class="dim">// Cliquez sur « Simuler une requête »</div>';go(0);typeIntro()}
+
+renderCh(0);renderQuiz();renderFixes();go(0);typeIntro();
+</script>
+</body>
+</html>
